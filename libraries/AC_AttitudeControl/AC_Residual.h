@@ -36,7 +36,6 @@ public:
 
 private:
     static constexpr uint32_t RESID_TIMEOUT_MS = 100;
-    static constexpr float RESID_YAW_MAX_DEG = 6.0f;
 
     AP_Int8 _enable;
     AP_Float _ang_max_deg;

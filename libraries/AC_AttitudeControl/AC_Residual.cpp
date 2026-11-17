@@ -12,7 +12,8 @@ const AP_Param::GroupInfo AC_Residual::var_info[] = {
     AP_GROUPINFO_FLAGS("ENABLE", 1, AC_Residual, _enable, 0, AP_PARAM_FLAG_ENABLE),
 
     // @Param: ANG_MAX
-    // @DisplayName: Residual roll/pitch angle limit
+    // @DisplayName: Residual angle limit
+    // @Description: Limit applied to each of the roll, pitch and yaw angle offsets
     // @Units: deg
     // @Range: 0 30
     // @User: Advanced
@@ -101,10 +102,9 @@ void AC_Residual::get_residual(Vector3f &ang_rad_body, float &thr) const
         thr = _thr;
     }
     const float ang_max = radians(constrain_float(_ang_max_deg.get(), 0.0f, 30.0f));
-    const float yaw_max = radians(RESID_YAW_MAX_DEG);
     const float thr_max = constrain_float(_thr_max.get(), 0.0f, 0.5f);
     ang_rad_body.x = constrain_float(ang_rad_body.x, -ang_max, ang_max);
     ang_rad_body.y = constrain_float(ang_rad_body.y, -ang_max, ang_max);
-    ang_rad_body.z = constrain_float(ang_rad_body.z, -yaw_max, yaw_max);
+    ang_rad_body.z = constrain_float(ang_rad_body.z, -ang_max, ang_max);
     thr = constrain_float(thr, -thr_max, thr_max);
 }
