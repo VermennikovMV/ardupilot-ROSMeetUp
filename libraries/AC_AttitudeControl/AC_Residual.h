@@ -29,6 +29,9 @@ public:
 
     bool enabled() const { return _enable.get() != 0; }
 
+    // report the vehicle flight mode number; a mode change clears the stored input
+    void set_flight_mode(uint8_t mode_number);
+
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
@@ -40,10 +43,12 @@ private:
     AP_Float _thr_max;
     AP_Float _test_roll_deg;
     AP_Float _test_pitch_deg;
+    AP_Int32 _modes;
 
     Vector3f _ang_rad;
     float _thr;
     uint32_t _last_update_ms;
+    uint8_t _mode_number;
 
     static AC_Residual *_singleton;
 };

@@ -38,6 +38,13 @@ const AP_Param::GroupInfo AC_Residual::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("TST_P", 5, AC_Residual, _test_pitch_deg, 0.0f),
 
+    // @Param: MODES
+    // @DisplayName: Flight modes accepting the residual correction
+    // @Description: Bitmask of vehicle flight mode numbers (bit N = mode number N). In any other mode the correction is zero. Default: GUIDED (mode 4) only
+    // @Bitmask: 0:Stabilize,2:AltHold,3:Auto,4:Guided,5:Loiter
+    // @User: Advanced
+    AP_GROUPINFO("MODES", 6, AC_Residual, _modes, (1U << 4)),
+
     AP_GROUPEND
 };
 
@@ -46,6 +53,7 @@ AC_Residual::AC_Residual()
     AP_Param::setup_object_defaults(this, var_info);
     _thr = 0.0f;
     _last_update_ms = 0;
+    _mode_number = 0;
     _singleton = this;
 }
 
@@ -59,11 +67,22 @@ void AC_Residual::set_residual(const Vector3f &ang_rad_body, float thr)
     _last_update_ms = AP_HAL::millis();
 }
 
+void AC_Residual::set_flight_mode(uint8_t mode_number)
+{
+    if (mode_number != _mode_number) {
+        // never carry a correction across a mode change
+        _ang_rad.zero();
+        _thr = 0.0f;
+        _last_update_ms = 0;
+    }
+    _mode_number = mode_number;
+}
+
 void AC_Residual::get_residual(Vector3f &ang_rad_body, float &thr) const
 {
     ang_rad_body.zero();
     thr = 0.0f;
-    if (!enabled()) {
+    if (!enabled() || _mode_number >= 32 || (uint32_t(_modes.get()) & (1UL << _mode_number)) == 0) {
         return;
     }
     const bool test = !is_zero(_test_roll_deg.get()) || !is_zero(_test_pitch_deg.get());
