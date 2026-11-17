@@ -4,6 +4,10 @@
 #include <AP_Math/chirp.h>
 #include <AP_ExternalControl/AP_ExternalControl_config.h> // TODO why is this needed if Copter.h includes this
 #include <AP_HAL/Semaphores.h>
+#include <AC_ResidualPolicy/AC_ResidualPolicy_config.h>
+#if HAL_RESIDUAL_POLICY_ENABLED
+#include <AC_ResidualPolicy/residual_policy.h>
+#endif
 
 #if AP_COPTER_ADVANCED_FAILSAFE_ENABLED
 #include "afs_copter.h"
@@ -1236,6 +1240,14 @@ private:
 
     // guided mode is paused or not
     bool _paused;
+
+#if HAL_RESIDUAL_POLICY_ENABLED
+    // embedded residual policy: 50 Hz bounded attitude/thrust correction in position control
+    void residual_policy_update();
+    residual::Policy residual_policy;
+    uint64_t residual_policy_last_us;
+    bool residual_policy_active;
+#endif
 };
 
 #if AP_SCRIPTING_ENABLED

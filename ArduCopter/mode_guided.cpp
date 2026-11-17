@@ -278,6 +278,11 @@ void ModeGuided::pos_control_start()
 
     // initialise position controller
     pva_control_start();
+
+#if HAL_RESIDUAL_POLICY_ENABLED
+    // the policy restarts from a fresh history whenever position control starts
+    residual_policy_active = false;
+#endif
 }
 
 // initialise guided mode's acceleration controller
@@ -770,6 +775,11 @@ void ModeGuided::pos_control_run()
     pos_control->input_pos_NED_m(guided_pos_target_ned_m, terrain_d_m, terrain_margin_m);
 
     // run position controllers
+#if HAL_RESIDUAL_POLICY_ENABLED
+    // embedded policy: computes the correction consumed by the attitude controller below
+    residual_policy_update();
+#endif
+
     pos_control->NE_update_controller();
     pos_control->D_update_controller();
 
@@ -1212,3 +1222,70 @@ bool ModeGuided::resume()
 }
 
 #endif
+
+#if HAL_RESIDUAL_POLICY_ENABLED
+// Runs the embedded residual policy at 50 Hz in GUIDED position control and hands its bounded
+// correction to AC_Residual (which clips it and applies it only when RESID_ENABLE and RESID_MODES allow).
+void ModeGuided::residual_policy_update()
+{
+    if (!g2.residual.enabled()) {
+        residual_policy_active = false;
+        return;
+    }
+    const uint64_t now_us = AP_HAL::micros64();
+    if (!residual_policy_active) {
+        // heading held by GUIDED, NED yaw -> ENU yaw
+        residual_policy.reset(float(M_PI_2) - attitude_control->get_att_target_euler_rad().z);
+        residual_policy_active = true;
+        residual_policy_last_us = now_us - 20000U;
+    }
+    if (now_us - residual_policy_last_us < 19500U) {
+        return;   // 50 Hz
+    }
+    residual::Inputs in {};
+    in.dt = (now_us - residual_policy_last_us) * 1.0e-6;
+    residual_policy_last_us = now_us;
+
+    const Vector3p &pos_ned = pos_control->get_pos_estimate_NED_m();
+    const Vector3f &vel_ned = pos_control->get_vel_estimate_NED_ms();
+    const Vector3p &goal_ned = get_target_pos_NED_m();
+    const Vector3f &vel_target_ned = pos_control->get_vel_target_NED_ms();
+    const Vector3f &accel_target_ned = pos_control->get_accel_target_NED_mss();
+    const float pos_f[3] {float(pos_ned.x), float(pos_ned.y), float(pos_ned.z)};
+    const float vel_f[3] {vel_ned.x, vel_ned.y, vel_ned.z};
+    const float goal_f[3] {float(goal_ned.x), float(goal_ned.y), float(goal_ned.z)};
+    const float vt_f[3] {vel_target_ned.x, vel_target_ned.y, vel_target_ned.z};
+    const float at_f[3] {accel_target_ned.x, accel_target_ned.y, accel_target_ned.z};
+    residual::ned_to_enu(pos_f, in.pos);
+    residual::ned_to_enu(vel_f, in.vel);
+    residual::ned_to_enu(goal_f, in.goal);
+    residual::ned_to_enu(vt_f, in.vel_target);
+    residual::ned_to_enu(at_f, in.acc_target);
+
+    const Matrix3f &m = ahrs.get_rotation_body_to_ned();
+    const float dcm[9] {m.a.x, m.a.y, m.a.z, m.b.x, m.b.y, m.b.z, m.c.x, m.c.y, m.c.z};
+    residual::dcm_ned_frd_to_enu_flu(dcm, in.rot);
+    const Vector3f &gyro = ahrs.get_gyro();
+    const float gyro_f[3] {gyro.x, gyro.y, gyro.z};
+    residual::frd_rates_to_flu(gyro_f, in.rates);
+
+    residual::Outputs out;
+    residual_policy.step(in, out);
+    g2.residual.set_residual(Vector3f(out.angle_offset_frd[0], out.angle_offset_frd[1], out.angle_offset_frd[2]),
+                             out.thrust_fraction);
+
+#if HAL_LOGGING_ENABLED
+    // @LoggerMessage: RESD
+    // @Description: Embedded residual policy output (before the firmware clip)
+    // @Field: TimeUS: Time since system startup
+    // @Field: R: roll offset, body FRD
+    // @Field: P: pitch offset, body FRD
+    // @Field: Y: yaw offset, body FRD
+    // @Field: T: collective thrust fraction
+    // @Field: DT: interval since the previous policy step
+    AP::logger().WriteStreaming("RESD", "TimeUS,R,P,Y,T,DT", "srrr-s", "F00000", "Qfffff",
+                                now_us, out.angle_offset_frd[0], out.angle_offset_frd[1],
+                                out.angle_offset_frd[2], out.thrust_fraction, float(in.dt));
+#endif
+}
+#endif  // HAL_RESIDUAL_POLICY_ENABLED
