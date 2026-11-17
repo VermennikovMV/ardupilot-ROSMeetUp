@@ -1,4 +1,5 @@
 #include "AC_AttitudeControl_Multi.h"
+#include "AC_Residual.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
 #include <AC_PID/AC_PID.h>
@@ -357,6 +358,14 @@ void AC_AttitudeControl_Multi::set_throttle_out(float throttle_in, bool apply_an
     } else {
         // Clear angle_boost for logging purposes
         _angle_boost = 0.0f;
+    }
+    // bounded residual correction: collective thrust factor (1 + thr), throttle is linearised thrust
+    const AC_Residual *residual = AC_Residual::get_singleton();
+    if (residual != nullptr) {
+        Vector3f residual_ang_rad;
+        float residual_thr;
+        residual->get_residual(residual_ang_rad, residual_thr);
+        throttle_in *= 1.0f + residual_thr;
     }
     _motors.set_throttle(throttle_in);
     _motors.set_throttle_avg_max(get_throttle_avg_max(MAX(throttle_in, _throttle_in)));

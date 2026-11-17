@@ -1,4 +1,5 @@
 #include "AC_AttitudeControl.h"
+#include "AC_Residual.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Vehicle/AP_Vehicle.h>
 #include <AP_Scheduler/AP_Scheduler.h>
@@ -995,6 +996,15 @@ void AC_AttitudeControl::attitude_controller_run_quat()
     // This vector represents the angular error to rotate the thrust vector using x and y and heading using z
     Vector3f attitude_error;
     thrust_heading_rotation_angles(_attitude_target, attitude_body, attitude_error, _thrust_angle_rad, _thrust_error_angle_rad);
+
+    // bounded residual correction: body-frame angle offset added before the angle P controller
+    const AC_Residual *residual = AC_Residual::get_singleton();
+    if (residual != nullptr) {
+        Vector3f residual_ang_rad;
+        float residual_thr;
+        residual->get_residual(residual_ang_rad, residual_thr);
+        attitude_error += residual_ang_rad;
+    }
 
     // Compute the angular velocity corrections in the body frame from the attitude error
     Vector3f ang_vel_body_rads = update_ang_vel_target_from_att_error(attitude_error);
