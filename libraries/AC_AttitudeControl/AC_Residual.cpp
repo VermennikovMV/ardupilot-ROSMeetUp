@@ -45,6 +45,13 @@ const AP_Param::GroupInfo AC_Residual::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("MODES", 6, AC_Residual, _modes, (1U << 4)),
 
+    // @Param: TST_T
+    // @DisplayName: Constant test thrust offset
+    // @Description: Non-zero overrides the input with a constant collective thrust fraction (still clipped by THR_MAX)
+    // @Range: -0.5 0.5
+    // @User: Advanced
+    AP_GROUPINFO("TST_T", 7, AC_Residual, _test_thr, 0.0f),
+
     AP_GROUPEND
 };
 
@@ -85,9 +92,10 @@ void AC_Residual::get_residual(Vector3f &ang_rad_body, float &thr) const
     if (!enabled() || _mode_number >= 32 || (uint32_t(_modes.get()) & (1UL << _mode_number)) == 0) {
         return;
     }
-    const bool test = !is_zero(_test_roll_deg.get()) || !is_zero(_test_pitch_deg.get());
+    const bool test = !is_zero(_test_roll_deg.get()) || !is_zero(_test_pitch_deg.get()) || !is_zero(_test_thr.get());
     if (test) {
         ang_rad_body = Vector3f(radians(_test_roll_deg.get()), radians(_test_pitch_deg.get()), 0.0f);
+        thr = _test_thr.get();
     } else if (_last_update_ms != 0 && AP_HAL::millis() - _last_update_ms <= RESID_TIMEOUT_MS) {
         ang_rad_body = _ang_rad;
         thr = _thr;

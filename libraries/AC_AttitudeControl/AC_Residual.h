@@ -44,6 +44,7 @@ private:
     AP_Float _test_roll_deg;
     AP_Float _test_pitch_deg;
     AP_Int32 _modes;
+    AP_Float _test_thr;
 
     Vector3f _ang_rad;
     float _thr;
