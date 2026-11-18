@@ -41,6 +41,10 @@ public:
     // yaw_reference_rad: heading the position controller holds (ENU yaw).
     void reset(float yaw_reference_rad);
     void step(const Inputs &in, Outputs &out);
+    // Observation only (80 inputs), without running the policy network. Used by the
+    // disturbance compensator, which sets the previous action itself.
+    void observe(const Inputs &in);
+    void set_previous_action(const float a[kAct]) { for (int i = 0; i < kAct; i++) prev_action_[i] = a[i]; }
     // For verification against the training code.
     const float *last_observation() const { return obs_; }
 
@@ -50,8 +54,6 @@ public:
 
 private:
     struct Frame { double t; double base[22]; double heading[9]; };
-    void observe(const Inputs &in);
-
     // double: the training code accumulates these in float64 (time drives history selection)
     double yaw_ref_ = 0.;
     double integral_[3] = {0, 0, 0};

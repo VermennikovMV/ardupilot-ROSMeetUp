@@ -1224,8 +1224,11 @@ bool ModeGuided::resume()
 #endif
 
 #if HAL_RESIDUAL_POLICY_ENABLED
-// Runs the embedded residual policy at 50 Hz in GUIDED position control and hands its bounded
-// correction to AC_Residual (which clips it and applies it only when RESID_ENABLE and RESID_MODES allow).
+// Runs the embedded disturbance compensator at 50 Hz in GUIDED position control: a learned
+// estimator infers the disturbance (horizontal force, vertical imbalance, effective mass) from the
+// vehicle state, position-controller targets and filtered thrust; a physics model turns it into a
+// bounded tilt/thrust correction for AC_Residual (clipped, applied only when RESID_ENABLE and
+// RESID_MODES allow).
 void ModeGuided::residual_policy_update()
 {
     if (!g2.residual.enabled()) {
@@ -1242,7 +1245,8 @@ void ModeGuided::residual_policy_update()
     if (now_us - residual_policy_last_us < 19500U) {
         return;   // 50 Hz
     }
-    residual::Inputs in {};
+    residual::CompInputs cin {};
+    residual::Inputs &in = cin.state;
     in.dt = (now_us - residual_policy_last_us) * 1.0e-6;
     residual_policy_last_us = now_us;
 
@@ -1269,23 +1273,34 @@ void ModeGuided::residual_policy_update()
     const float gyro_f[3] {gyro.x, gyro.y, gyro.z};
     residual::frd_rates_to_flu(gyro_f, in.rates);
 
-    residual::Outputs out;
-    residual_policy.step(in, out);
+    // collective thrust command relative to hover thrust (linearised throttle units)
+    const float hover = is_positive(g2.residual.thrust_hover()) ? g2.residual.thrust_hover() : motors->get_throttle_hover();
+    cin.thrust_ratio = is_positive(hover) ? double(motors->get_throttle() / hover) : 1.0;
+
+    residual::CompOutputs out;
+    residual_policy.step(cin, out);
     g2.residual.set_residual(Vector3f(out.angle_offset_frd[0], out.angle_offset_frd[1], out.angle_offset_frd[2]),
                              out.thrust_fraction);
 
 #if HAL_LOGGING_ENABLED
     // @LoggerMessage: RESD
-    // @Description: Embedded residual policy output (before the firmware clip)
+    // @Description: Embedded disturbance compensator output (before the firmware clip) and estimate
     // @Field: TimeUS: Time since system startup
     // @Field: R: roll offset, body FRD
     // @Field: P: pitch offset, body FRD
     // @Field: Y: yaw offset, body FRD
     // @Field: T: collective thrust fraction
-    // @Field: DT: interval since the previous policy step
-    AP::logger().WriteStreaming("RESD", "TimeUS,R,P,Y,T,DT", "srrr-s", "F00000", "Qfffff",
+    // @Field: DT: interval since the previous step
+    // @Field: AX: estimated disturbance acceleration, heading frame forward
+    // @Field: AY: estimated disturbance acceleration, heading frame left
+    // @Field: AZ: estimated vertical imbalance
+    // @Field: M: estimated effective mass ratio
+    // @Field: TR: thrust ratio input
+    AP::logger().WriteStreaming("RESD", "TimeUS,R,P,Y,T,DT,AX,AY,AZ,M,TR", "srrr-soooo-", "F0000000000", "Qffffffffff",
                                 now_us, out.angle_offset_frd[0], out.angle_offset_frd[1],
-                                out.angle_offset_frd[2], out.thrust_fraction, float(in.dt));
+                                out.angle_offset_frd[2], out.thrust_fraction, float(in.dt),
+                                out.estimate[0], out.estimate[1], out.estimate[2], out.estimate[3],
+                                float(cin.thrust_ratio));
 #endif
 }
 #endif  // HAL_RESIDUAL_POLICY_ENABLED

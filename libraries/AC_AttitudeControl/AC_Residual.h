@@ -28,6 +28,8 @@ public:
     void get_residual(Vector3f &ang_rad_body, float &thr) const;
 
     bool enabled() const { return _enable.get() != 0; }
+    // hover throttle reference for the estimator (0 = use MOT_THST_HOVER)
+    float thrust_hover() const { return _thr_hover.get(); }
 
     // report the vehicle flight mode number; a mode change clears the stored input
     void set_flight_mode(uint8_t mode_number);
@@ -44,6 +46,7 @@ private:
     AP_Float _test_pitch_deg;
     AP_Int32 _modes;
     AP_Float _test_thr;
+    AP_Float _thr_hover;
 
     Vector3f _ang_rad;
     float _thr;

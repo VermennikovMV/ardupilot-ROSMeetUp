@@ -53,6 +53,13 @@ const AP_Param::GroupInfo AC_Residual::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("TST_T", 7, AC_Residual, _test_thr, 0.0f),
 
+    // @Param: THR_HOVR
+    // @DisplayName: Residual hover throttle reference
+    // @Description: Throttle that holds the vehicle in hover, used as the 1.0 reference for the thrust input of the onboard disturbance estimator. 0 uses MOT_THST_HOVER. Set it from a hover log (or hover throttle learning) when MOT_THST_HOVER is not learnt.
+    // @Range: 0 0.8
+    // @User: Advanced
+    AP_GROUPINFO("THR_HOVR", 8, AC_Residual, _thr_hover, 0.0f),
+
     AP_GROUPEND
 };
 

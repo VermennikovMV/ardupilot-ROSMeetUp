@@ -6,7 +6,7 @@
 #include <AP_HAL/Semaphores.h>
 #include <AC_ResidualPolicy/AC_ResidualPolicy_config.h>
 #if HAL_RESIDUAL_POLICY_ENABLED
-#include <AC_ResidualPolicy/residual_policy.h>
+#include <AC_ResidualPolicy/disturbance_compensator.h>
 #endif
 
 #if AP_COPTER_ADVANCED_FAILSAFE_ENABLED
@@ -1244,7 +1244,7 @@ private:
 #if HAL_RESIDUAL_POLICY_ENABLED
     // embedded residual policy: 50 Hz bounded attitude/thrust correction in position control
     void residual_policy_update();
-    residual::Policy residual_policy;
+    residual::DisturbanceCompensator residual_policy;
     uint64_t residual_policy_last_us;
     bool residual_policy_active;
 #endif
