@@ -5,6 +5,7 @@
 #include <AP_Common/AP_Common.h>
 #include "RC_Channel_Copter.h"
 #include <AP_Proximity/AP_Proximity.h>
+#include <AC_AttitudeControl/AC_Residual.h>
 
 class ModeRTL;
 
@@ -703,6 +704,8 @@ public:
     void *mode_poshold_ptr;
 #endif
 
+    // bounded residual attitude/thrust correction
+    AC_Residual residual;
 };
 
 extern const AP_Param::Info        var_info[];

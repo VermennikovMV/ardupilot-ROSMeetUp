@@ -434,6 +434,7 @@ bool Copter::set_mode(Mode::Number mode, ModeReason reason)
 
     // update flight mode
     flightmode = new_flightmode;
+    g2.residual.set_flight_mode((uint8_t)flightmode->mode_number());
     control_mode_reason = reason;
 #if HAL_LOGGING_ENABLED
     logger.Write_Mode((uint8_t)flightmode->mode_number(), reason);

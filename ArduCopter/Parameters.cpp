@@ -1171,6 +1171,10 @@ const AP_Param::GroupInfo ParametersG2::var_info2[] = {
 
     // ID 62 is reserved for the AP_SUBGROUPEXTENSION
 
+    // @Group: RESID_
+    // @Path: ../libraries/AC_AttitudeControl/AC_Residual.cpp
+    AP_SUBGROUPINFO(residual, "RESID_", 21, ParametersG2, AC_Residual),
+
     AP_GROUPEND
 };
 
