@@ -1,4 +1,5 @@
 #include "AC_AttitudeControl.h"
+#include "AC_Residual.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Vehicle/AP_Vehicle.h>
 #include <AP_Scheduler/AP_Scheduler.h>
@@ -995,6 +996,28 @@ void AC_AttitudeControl::attitude_controller_run_quat()
     // This vector represents the angular error to rotate the thrust vector using x and y and heading using z
     Vector3f attitude_error;
     thrust_heading_rotation_angles(_attitude_target, attitude_body, attitude_error, _thrust_angle_rad, _thrust_error_angle_rad);
+
+    // bounded residual correction: body-frame angle offset added before the angle P controller.
+    // The lean it asks for together with the target never exceeds ATC_ANGLE_MAX.
+    const AC_Residual *residual = AC_Residual::get_singleton();
+    if (residual != nullptr) {
+        Vector3f residual_ang_rad;
+        float residual_thr;
+        residual->get_residual(residual_ang_rad, residual_thr);
+        if (!residual_ang_rad.is_zero()) {
+            float target_roll_rad, target_pitch_rad, target_yaw_rad;
+            _attitude_target.to_euler(target_roll_rad, target_pitch_rad, target_yaw_rad);
+            const Vector2f target_lean(target_roll_rad, target_pitch_rad);
+            Vector2f lean = target_lean + Vector2f(residual_ang_rad.x, residual_ang_rad.y);
+            const float lean_max_rad = lean_angle_max_rad();
+            if (lean.length() > lean_max_rad && lean.length() > target_lean.length()) {
+                lean *= MAX(lean_max_rad, target_lean.length()) / lean.length();
+                residual_ang_rad.x = lean.x - target_lean.x;
+                residual_ang_rad.y = lean.y - target_lean.y;
+            }
+            attitude_error += residual_ang_rad;
+        }
+    }
 
     // Compute the angular velocity corrections in the body frame from the attitude error
     Vector3f ang_vel_body_rads = update_ang_vel_target_from_att_error(attitude_error);
