@@ -31,7 +31,7 @@ class Compensator {
 public:
     static constexpr double kG = 9.81;
     static constexpr double kKxy = 1.0;
-    static constexpr double kKz = 0.5;
+    static constexpr double kKz = 1.0;
     static constexpr double kThrustTau[2] = {0.3, 1.5};
 
     void reset(float yaw_reference_rad);
