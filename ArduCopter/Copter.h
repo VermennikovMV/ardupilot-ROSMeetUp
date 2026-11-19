@@ -394,6 +394,11 @@ private:
     // This is the state of the flight control system
     // There are multiple states defined such as STABILIZE, ACRO,
     Mode *flightmode;
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+    // embedded disturbance compensator, shared by AUTO, GUIDED, LOITER and RTL (Mode::compensator_update)
+    disturbance::Compensator compensator;
+    uint64_t compensator_last_us;
+#endif
 
     RCMapper rcmap;
 

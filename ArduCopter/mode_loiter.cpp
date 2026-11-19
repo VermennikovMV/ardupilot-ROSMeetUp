@@ -160,6 +160,9 @@ void ModeLoiter::run()
 #else
         loiter_nav->update();
 #endif
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+        compensator_update(pos_control->get_pos_target_NED_m());
+#endif
 
 
         // get avoidance adjusted climb rate

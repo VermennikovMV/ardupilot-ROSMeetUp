@@ -1169,3 +1169,87 @@ Location Mode::get_stopping_point() const
     copter.pos_control->get_stopping_point_D_m(stopping_point_ned_m.z);
     return Location::from_ekf_offset_NED_m(stopping_point_ned_m, Location::AltFrame::ABOVE_ORIGIN);
 }
+
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+// Embedded disturbance compensator, 50 Hz, for the modes that hold position with the position
+// controller (AUTO, GUIDED, LOITER, RTL). A learned estimator infers the disturbance (horizontal
+// force, vertical imbalance, effective mass) from the vehicle state, position-controller targets and
+// filtered thrust; a physics model turns it into a bounded tilt/thrust correction for AC_Residual
+// (clipped, applied only when RESID_ENABLE and RESID_MODES allow).
+// goal_ned_m: the point the mode flies to (GUIDED target, AUTO/RTL waypoint, LOITER target).
+void Mode::compensator_update(const Vector3p &goal_ned_m)
+{
+    if (!g2.residual.enabled()) {
+        return;
+    }
+    // heading held by the mode, NED yaw -> ENU yaw
+    const float yaw_ref = float(M_PI_2) - attitude_control->get_att_target_euler_rad().z;
+    const uint64_t now_us = AP_HAL::micros64();
+    if (now_us - copter.compensator_last_us > 100000U) {
+        // not run for 0.1 s (another mode, on the ground, disabled): start from a fresh history.
+        // A switch between the modes that run it (e.g. GUIDED -> AUTO) keeps the estimate.
+        copter.compensator.reset(yaw_ref);
+        copter.compensator_last_us = now_us - 20000U;
+    }
+    if (now_us - copter.compensator_last_us < 19500U) {
+        return;   // 50 Hz
+    }
+    disturbance::CompInputs cin {};
+    disturbance::Inputs &in = cin.state;
+    in.dt = (now_us - copter.compensator_last_us) * 1.0e-6;
+    copter.compensator_last_us = now_us;
+
+    const Vector3p &pos_ned = pos_control->get_pos_estimate_NED_m();
+    const Vector3f &vel_ned = pos_control->get_vel_estimate_NED_ms();
+    const Vector3p &goal_ned = goal_ned_m;
+    const Vector3f &vel_target_ned = pos_control->get_vel_target_NED_ms();
+    const Vector3f &accel_target_ned = pos_control->get_accel_target_NED_mss();
+    const float pos_f[3] {float(pos_ned.x), float(pos_ned.y), float(pos_ned.z)};
+    const float vel_f[3] {vel_ned.x, vel_ned.y, vel_ned.z};
+    const float goal_f[3] {float(goal_ned.x), float(goal_ned.y), float(goal_ned.z)};
+    const float vt_f[3] {vel_target_ned.x, vel_target_ned.y, vel_target_ned.z};
+    const float at_f[3] {accel_target_ned.x, accel_target_ned.y, accel_target_ned.z};
+    disturbance::ned_to_enu(pos_f, in.pos);
+    disturbance::ned_to_enu(vel_f, in.vel);
+    disturbance::ned_to_enu(goal_f, in.goal);
+    disturbance::ned_to_enu(vt_f, in.vel_target);
+    disturbance::ned_to_enu(at_f, in.acc_target);
+
+    const Matrix3f &m = ahrs.get_rotation_body_to_ned();
+    const float dcm[9] {m.a.x, m.a.y, m.a.z, m.b.x, m.b.y, m.b.z, m.c.x, m.c.y, m.c.z};
+    disturbance::dcm_ned_frd_to_enu_flu(dcm, in.rot);
+    const Vector3f &gyro = ahrs.get_gyro();
+    const float gyro_f[3] {gyro.x, gyro.y, gyro.z};
+    disturbance::frd_rates_to_flu(gyro_f, in.rates);
+
+    // collective thrust command relative to hover thrust (linearised throttle units)
+    const float hover = motors->get_throttle_hover();   // MOT_THST_HOVER (learnt by the autopilot)
+    cin.thrust_ratio = is_positive(hover) ? double(motors->get_throttle() / hover) : 1.0;
+
+    disturbance::CompOutputs out;
+    copter.compensator.set_yaw_reference(yaw_ref);
+    copter.compensator.step(cin, out);
+    g2.residual.set_residual(Vector3f(out.angle_offset_frd[0], out.angle_offset_frd[1], out.angle_offset_frd[2]),
+                             out.thrust_fraction);
+
+#if HAL_LOGGING_ENABLED
+    // @LoggerMessage: RESD
+    // @Description: Embedded disturbance compensator output (before the firmware clip) and estimate
+    // @Field: TimeUS: Time since system startup
+    // @Field: R: roll offset, body FRD
+    // @Field: P: pitch offset, body FRD
+    // @Field: Y: yaw offset, body FRD
+    // @Field: T: collective thrust fraction
+    // @Field: DT: interval since the previous step
+    // @Field: AX: estimated disturbance acceleration, heading frame forward
+    // @Field: AY: estimated disturbance acceleration, heading frame left
+    // @Field: AZ: estimated vertical imbalance
+    // @Field: TR: thrust ratio input
+    AP::logger().WriteStreaming("RESD", "TimeUS,R,P,Y,T,DT,AX,AY,AZ,TR", "srrr-sooo-", "F000000000", "Qfffffffff",
+                                now_us, out.angle_offset_frd[0], out.angle_offset_frd[1],
+                                out.angle_offset_frd[2], out.thrust_fraction, float(in.dt),
+                                out.estimate[0], out.estimate[1], out.estimate[2],
+                                float(cin.thrust_ratio));
+#endif
+}
+#endif  // HAL_DISTURBANCE_COMPENSATOR_ENABLED

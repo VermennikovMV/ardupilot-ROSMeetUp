@@ -240,6 +240,9 @@ void ModeRTL::climb_return_run()
 
     // run waypoint controller
     copter.failsafe_terrain_set_status(wp_nav->update_wpnav());
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+    compensator_update(wp_nav->get_wp_destination_NED_m());
+#endif
 
     // WP_Nav has set the vertical position control targets
     // run the vertical position controller and set output throttle
@@ -282,6 +285,9 @@ void ModeRTL::loiterathome_run()
 
     // run waypoint controller
     copter.failsafe_terrain_set_status(wp_nav->update_wpnav());
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+    compensator_update(wp_nav->get_wp_destination_NED_m());
+#endif
 
     // WP_Nav has set the vertical position control targets
     // run the vertical position controller and set output throttle

@@ -278,6 +278,7 @@ void ModeGuided::pos_control_start()
 
     // initialise position controller
     pva_control_start();
+
 }
 
 // initialise guided mode's acceleration controller
@@ -770,6 +771,11 @@ void ModeGuided::pos_control_run()
     pos_control->input_pos_NED_m(guided_pos_target_ned_m, terrain_d_m, terrain_margin_m);
 
     // run position controllers
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+    // disturbance compensator: correction consumed by the attitude controller below
+    compensator_update(get_target_pos_NED_m());
+#endif
+
     pos_control->NE_update_controller();
     pos_control->D_update_controller();
 
@@ -1212,3 +1218,4 @@ bool ModeGuided::resume()
 }
 
 #endif
+

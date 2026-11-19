@@ -4,6 +4,10 @@
 #include <AP_Math/chirp.h>
 #include <AP_ExternalControl/AP_ExternalControl_config.h> // TODO why is this needed if Copter.h includes this
 #include <AP_HAL/Semaphores.h>
+#include <AC_DisturbanceCompensator/AC_DisturbanceCompensator_config.h>
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+#include <AC_DisturbanceCompensator/disturbance_compensator.h>
+#endif
 
 #if AP_COPTER_ADVANCED_FAILSAFE_ENABLED
 #include "afs_copter.h"
@@ -213,6 +217,11 @@ public:
     virtual bool enabled() const { return true; }
 
 protected:
+
+#if HAL_DISTURBANCE_COMPENSATOR_ENABLED
+    // embedded disturbance compensator (50 Hz) for the modes that hold position (see mode.cpp)
+    void compensator_update(const Vector3p &goal_ned_m);
+#endif
 
     // helper functions
     bool is_disarmed_or_landed() const;
@@ -1236,6 +1245,7 @@ private:
 
     // guided mode is paused or not
     bool _paused;
+
 };
 
 #if AP_SCRIPTING_ENABLED
