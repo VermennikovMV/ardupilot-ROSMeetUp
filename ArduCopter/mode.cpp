@@ -1173,7 +1173,7 @@ Location Mode::get_stopping_point() const
 #if HAL_DISTURBANCE_COMPENSATOR_ENABLED
 // Embedded disturbance compensator, 50 Hz, for the modes that hold position with the position
 // controller (AUTO, GUIDED, LOITER, RTL). A learned estimator infers the disturbance (horizontal
-// force, vertical imbalance, effective mass) from the vehicle state, position-controller targets and
+// force and vertical imbalance) from the vehicle state, position-controller targets and
 // filtered thrust; a physics model turns it into a bounded tilt/thrust correction for AC_Residual
 // (clipped, applied only when RESID_ENABLE and RESID_MODES allow).
 // goal_ned_m: the point the mode flies to (GUIDED target, AUTO/RTL waypoint, LOITER target).
